@@ -24,7 +24,6 @@ func signTX(priv, msg string) (sig string, err error) {
 	if err != nil {
 		return
 	}
-	sig = hex.EncodeToString(raw)
 	return
 }
 

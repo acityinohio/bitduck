@@ -1,9 +1,9 @@
 package main
 
 import (
-	"html/template"
 	"net/http"
 	"strconv"
+	"text/template"
 
 	"github.com/acityinohio/baduk"
 	"github.com/acityinohio/blockcy"
@@ -45,17 +45,36 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func gamesHandler(w http.ResponseWriter, r *http.Request) {
+func gameHandler(w http.ResponseWriter, r *http.Request) {
 	multi := r.URL.Path[len("/games/"):]
 	board, ok := boards[multi]
 	if !ok {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Board does not exist", http.StatusInternalServerError)
+		return
 	}
-	err := templates.ExecuteTemplate(w, "game.html", "")
+	if r.Method == "POST" {
+		moveHandler(w, r, board)
+		return
+	}
+	type gameTemp struct {
+		Multi     string
+		PrettySVG string
+		BlackMove bool
+	}
+	necessary := gameTemp{board.multi, board.state.PrettySVG(), board.blackMove}
+	err := templates.ExecuteTemplate(w, "game.html", necessary)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func moveHandler(w http.ResponseWriter, r *http.Request, board Gob) {
+	//Get move and signature
+	//Verify move/signature
+	//If verified, set board, update memory
+	//Otherwise, revert back to board setting
+	return
 }
 
 func newGameHandler(w http.ResponseWriter, r *http.Request) {
@@ -104,6 +123,6 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 	//Just use WIP for now
 	board.multi = wip.Trans.Outputs[0].Addresses[0]
 	boards[board.multi] = board
-	http.Redirect(w, r, "/games/"+board.multi)
+	http.Redirect(w, r, "/games/"+board.multi, http.StatusFound)
 	return
 }
