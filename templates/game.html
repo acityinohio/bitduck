@@ -9,7 +9,7 @@
 		<h1>To move: {{if .BlackMove}}black{{else}}white{{end}}</h1>
 		<div>{{.PrettySVG}}</div>
 		<div id="confirm-move" class="modal fade">
-			<form action="/games/{{.Multi}}">     
+			<form action="/games/{{.Multi}}" method="POST">     
 				<div class="modal-dialog">
 					<div class="modal-content">
 						<div class="modal-header">
@@ -21,6 +21,7 @@
 							<div class="well" id="move-sig">
 								black-3-0
 							</div>
+							<input type=hidden name="orig-message" id="orig-message" />
 							<textarea name="signed-move" id="signed-move" rows="10"></textarea>
 						</div>
 						<div class="modal-footer">
@@ -37,17 +38,16 @@
 				var currentColor = {{if .BlackMove}}"black"{{else}}"white"{{end}};
 				var $confirmMoveModal = $('#confirm-move');
 				var $confirmText = $('#move-sig');
+				var $origText = $('#orig-message');
 
 				$('#board').on('click', '.empty-vertex', function(e) {
 					var $el = $(this);
 					window.el = $el;
 					var x = $el.data('x');
 					var y = $el.data('y');
-					$confirmText.text([
-						currentColor,
-						x,
-						y
-					].join(', '));
+					var msg = [ currentColor, x, y ].join('-');
+					$confirmText.text(msg);
+					$origText.attr('value',msg);
 					$confirmMoveModal.modal();
 				});
 			});

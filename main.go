@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"text/template"
 
 	"github.com/acityinohio/baduk"
@@ -22,10 +23,17 @@ type Gob struct {
 var templates = template.Must(template.ParseGlob("templates/*"))
 
 //Keeping it all in memory
-var boards map[string]Gob
+var boards map[string]*Gob
 
 func init() {
-	boards = make(map[string]Gob)
+	boards = make(map[string]*Gob)
+	var board Gob
+	board.state.Init(4)
+	board.blackPK = "024e57e7d387e40add43a71fa998cf9004deb73741b57dcff4cfe31251ceab64ce"
+	board.whitePK = "024f20d3f0d97e9cbce9e7d0586b034140b5d320fd86ea4ce14d1d82e52187ab38"
+	board.blackMove = true
+	board.multi = "Dtest"
+	boards["Dtest"] = &board
 	blockcy.Config.Coin, blockcy.Config.Chain = "bcy", "test"
 	blockcy.Config.Token = "e212e91ac4d218cbc18f7eb3975122e3"
 }
@@ -33,7 +41,7 @@ func init() {
 func main() {
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/games/", gameHandler)
-	http.HandleFunc("/games/new/", newGameHandler)
+	http.HandleFunc("/new/", newGameHandler)
 	http.ListenAndServe(":8080", nil)
 }
 
@@ -69,11 +77,49 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func moveHandler(w http.ResponseWriter, r *http.Request, board Gob) {
+func moveHandler(w http.ResponseWriter, r *http.Request, board *Gob) {
 	//Get move and signature
 	//Verify move/signature
 	//If verified, set board, update memory
 	//Otherwise, revert back to board setting
+	f := r.FormValue
+	raw := f("orig-message")
+	rawmove := strings.Split(raw, "-")
+	xmove, _ := strconv.Atoi(rawmove[1])
+	ymove, _ := strconv.Atoi(rawmove[2])
+	rawmsg := f("signed-move")
+	blackVerify, _ := verifyMsg(board.blackPK, rawmsg, raw)
+	whiteVerify, _ := verifyMsg(board.whitePK, rawmsg, raw)
+	if board.blackMove && rawmove[0] != "black" {
+		http.Error(w, "Not black's turn", http.StatusInternalServerError)
+		return
+	}
+	if !board.blackMove && rawmove[0] != "white" {
+		http.Error(w, "Not white's turn", http.StatusInternalServerError)
+		return
+	}
+	if board.blackMove && blackVerify {
+		err := board.state.SetB(xmove, ymove)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else if !board.blackMove && whiteVerify {
+		err := board.state.SetW(xmove, ymove)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		http.Error(w, "Bad signature", http.StatusInternalServerError)
+		return
+	}
+	if board.blackMove {
+		board.blackMove = false
+	} else {
+		board.blackMove = true
+	}
+	http.Redirect(w, r, "/games/"+board.multi, http.StatusFound)
 	return
 }
 
@@ -122,7 +168,7 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 	//tx, err := blockcy.SendTX(wip)
 	//Just use WIP for now
 	board.multi = wip.Trans.Outputs[0].Addresses[0]
-	boards[board.multi] = board
+	boards[board.multi] = &board
 	http.Redirect(w, r, "/games/"+board.multi, http.StatusFound)
 	return
 }
