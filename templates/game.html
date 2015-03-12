@@ -7,7 +7,7 @@
 	</head>
 	<body>
 		<h1>To move: {{if .BlackMove}}black{{else}}white{{end}}</h1>
-		<div>{{.PrettySVG}}</div>
+		<div style="height:100vh">{{.PrettySVG}}</div>
 		<div id="confirm-move" class="modal fade">
 			<form action="/games/{{.Multi}}" method="POST">     
 				<div class="modal-dialog">
