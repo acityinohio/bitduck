@@ -4,16 +4,12 @@
 	<title>Bitduck Quack Quack</title>
 </head>
 <body>
-	<form action="/games/new" method="POST">
+	<form action="/games/new/" method="POST">
 		<input type="number" name="size" placeholder="4" required autofocus />
 		<br />
 		<input type="text" name="blackPK" placeholder="BlackPublicKey" required />
 		<br />
 		<input type="text" name="whitePK" placeholder="WhitePublicKey" required />
-		<br />
-		<input type="text" name="blackWinAddr" placeholder="BlackWinAddress" required />
-		<br />
-		<input type="text" name="whiteWinAddr" placeholder="WhiteWinAddress" required />
 		<br />
 		<input type="submit">
 	</form>

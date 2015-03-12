@@ -21,6 +21,10 @@ func signTX(priv, msg string) (sig string, err error) {
 		return
 	}
 	sig = hex.EncodeToString(signature.Serialize())
+	if err != nil {
+		return
+	}
+	sig = hex.EncodeToString(raw)
 	return
 }
 

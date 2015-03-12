@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -11,29 +10,30 @@ import (
 )
 
 type Gob struct {
-	multi        string
-	serverPub    string
-	serverPriv   string
-	blackPK      string
-	whitePK      string
-	blackWinAddr string
-	whiteWinAddr string
-	blackMove    bool
-	state        baduk.Board
+	multi      string
+	serverPub  string
+	serverPriv string
+	blackPK    string
+	whitePK    string
+	blackMove  bool
+	state      baduk.Board
 }
 
 var templates = template.Must(template.ParseGlob("templates/*"))
 
 //Keeping it all in memory
-var boards []Gob
+var boards map[string]Gob
 
 func init() {
+	boards = make(map[string]Gob)
 	blockcy.Config.Coin, blockcy.Config.Chain = "bcy", "test"
+	blockcy.Config.Token = "e212e91ac4d218cbc18f7eb3975122e3"
 }
 
 func main() {
 	http.HandleFunc("/", indexHandler)
-	http.HandleFunc("/games/new", newGameHandler)
+	http.HandleFunc("/games/", gameHandler)
+	http.HandleFunc("/games/new/", newGameHandler)
 	http.ListenAndServe(":8080", nil)
 }
 
@@ -45,8 +45,20 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func gamesHandler(w http.ResponseWriter, r *http.Request) {
+	multi := r.URL.Path[len("/games/"):]
+	board, ok := boards[multi]
+	if !ok {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	err := templates.ExecuteTemplate(w, "game.html", "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 func newGameHandler(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/games/new", http.StatusFound)
 	f := r.FormValue
 	var board Gob
 	var err error
@@ -59,8 +71,6 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 	board.state.Init(sz)
 	board.blackPK = f("blackPK")
 	board.whitePK = f("whitePK")
-	board.blackWinAddr = f("blackWinAddr")
-	board.whiteWinAddr = f("whiteWinAddr")
 	board.blackMove = true
 	//Generate pub/priv key for this board
 	pair, err := blockcy.GenAddrPair()
@@ -79,6 +89,8 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//Sign transaction
+	wip.Signatures = make([]string, len(wip.ToSign))
+	wip.PubKeys = make([]string, len(wip.ToSign))
 	for i, v := range wip.ToSign {
 		wip.Signatures[i], err = signTX(pair.Private, v)
 		wip.PubKeys[i] = pair.Public
@@ -88,7 +100,10 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	//Send transaction
-	tx, err := blockcy.SendTX(wip)
-	fmt.Fprintf(w, "%+v\n", tx)
+	//tx, err := blockcy.SendTX(wip)
+	//Just use WIP for now
+	board.multi = wip.Trans.Outputs[0].Addresses[0]
+	boards[board.multi] = board
+	http.Redirect(w, r, "/games/"+board.multi)
 	return
 }
