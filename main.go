@@ -165,9 +165,12 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	//Send transaction
-	//tx, err := blockcy.SendTX(wip)
-	//Just use WIP for now
-	board.multi = wip.Trans.Outputs[0].Addresses[0]
+	tx, err := blockcy.SendTX(wip)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	board.multi = tx.Trans.Outputs[0].Addresses[0]
 	boards[board.multi] = &board
 	http.Redirect(w, r, "/games/"+board.multi, http.StatusFound)
 	return

@@ -6,7 +6,7 @@
 		<link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css" rel="stylesheet" />
 	</head>
 	<body>
-		<h1>To move: {{if .BlackMove}}black{{else}}white{{end}}</h1>
+		<h1>{{if .BlackMove}}Black's{{else}}White's{{end}} Turn</h1>
 		<div style="height:100vh">{{.PrettySVG}}</div>
 		<div id="confirm-move" class="modal fade">
 			<form action="/games/{{.Multi}}" method="POST">     
