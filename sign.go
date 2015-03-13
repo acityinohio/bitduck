@@ -15,8 +15,8 @@ func signTX(priv, msg string) (sig string, err error) {
 	}
 	privKey, _ := btcec.PrivKeyFromBytes(btcec.S256(), pkBytes)
 	// Sign a message using the private key.
-	messageHash, err := hex.DecodeString(msg)
-	signature, err := privKey.Sign(messageHash)
+	data, err := hex.DecodeString(msg)
+	signature, err := privKey.Sign(data)
 	if err != nil {
 		return
 	}
