@@ -2,16 +2,36 @@
 <html>
 <head>
 	<title>Bitduck Quack Quack</title>
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
 </head>
 <body>
-	<form action="/new/" method="POST">
-		<input type="number" name="size" placeholder="4" required autofocus />
-		<br />
-		<input type="text" name="blackPK" placeholder="BlackPublicKey" required />
-		<br />
-		<input type="text" name="whitePK" placeholder="WhitePublicKey" required />
-		<br />
-		<input type="submit">
-	</form>
+	<h1>Initialize a Go Board</h1>
+	<div class="well">
+		<form action="/new/" method="POST">
+			<div class="form-group">
+				<label for="size">Board Size</label>
+				<input type="number" name="size" placeholder="4" min="4" max="19" required autofocus class="form-control" />
+			</div>
+			<div class="form-group">
+				<label for="blackPK">Black Stone Player Public Key</label>
+				<input type="text" name="blackPK" placeholder="BlackPublicKey" required class="form-control" />
+			</div>
+			<div class="form-group">
+				<label for="whitePK">White Stone Player Public Key</label>
+				<input type="text" name="whitePK" placeholder="WhitePublicKey" required class="form-control" />
+			</div>
+			<input type="submit" class="btn btn-primary btn-submit">
+		</form>
+	</div>
+	<style type="text/css">
+		html {
+			text-align: center;
+		}
+		form {
+			width: 600px;
+			display: inline-block;
+			text-align: left;
+		}
+	</style>
 </body>
 </html>
