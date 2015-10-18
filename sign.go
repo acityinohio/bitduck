@@ -7,26 +7,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
-func signTX(priv, msg string) (sig string, err error) {
-	// Decode a hex-encoded private key.
-	pkBytes, err := hex.DecodeString(priv)
-	if err != nil {
-		return
-	}
-	privKey, _ := btcec.PrivKeyFromBytes(btcec.S256(), pkBytes)
-	// Sign a message using the private key.
-	data, err := hex.DecodeString(msg)
-	signature, err := privKey.Sign(data)
-	if err != nil {
-		return
-	}
-	sig = hex.EncodeToString(signature.Serialize())
-	if err != nil {
-		return
-	}
-	return
-}
-
 func signMsg(priv, msg string) (sig string, err error) {
 	// Decode a hex-encoded private key.
 	pkBytes, err := hex.DecodeString(priv)

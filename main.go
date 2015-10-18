@@ -7,7 +7,7 @@ import (
 	"text/template"
 
 	"github.com/acityinohio/baduk"
-	"github.com/acityinohio/blockcy"
+	"github.com/blockcypher/gobcy"
 )
 
 type Gob struct {
@@ -24,6 +24,7 @@ var templates = template.Must(template.ParseGlob("templates/*"))
 
 //Keeping it all in memory
 var boards map[string]*Gob
+var bcy gobcy.API
 
 func init() {
 	boards = make(map[string]*Gob)
@@ -34,15 +35,14 @@ func init() {
 	board.blackMove = true
 	board.multi = "Dtest"
 	boards["Dtest"] = &board
-	blockcy.Config.Coin, blockcy.Config.Chain = "bcy", "test"
-	blockcy.Config.Token = "e212e91ac4d218cbc18f7eb3975122e3"
+	bcy = gobcy.API{"TESTTOKEN", "bcy", "test"}
 }
 
 func main() {
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/games/", gameHandler)
 	http.HandleFunc("/new/", newGameHandler)
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":80", nil)
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +138,7 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 	board.whitePK = f("whitePK")
 	board.blackMove = true
 	//Generate pub/priv key for this board
-	pair, err := blockcy.GenAddrPair()
+	pair, err := bcy.GenAddrKeychain()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -146,26 +146,25 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 	board.serverPub = pair.Public
 	board.serverPriv = pair.Private
 	//Simulate funding multisig wallet from server
-	pair.Faucet(5e6)
-	txskel, err := blockcy.SkelMultiTX(pair.Address, "", 4e6, false, 2, []string{board.serverPub, board.blackPK, board.whitePK})
-	wip, err := blockcy.NewTX(txskel)
+	_, err = bcy.Faucet(pair, 5e6)
+	txskel, err := gobcy.TempMultiTX(pair.Address, "", 4e6, 2, []string{board.serverPub, board.blackPK, board.whitePK})
+	wip, err := bcy.NewTX(txskel, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	//Sign transaction
-	wip.Signatures = make([]string, len(wip.ToSign))
-	wip.PubKeys = make([]string, len(wip.ToSign))
-	for i, v := range wip.ToSign {
-		wip.Signatures[i], err = signTX(pair.Private, v)
-		wip.PubKeys[i] = pair.Public
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	//Make temporary array of keys, sign transaction
+	tempPriv := make([]string, len(wip.ToSign))
+	for i := range tempPriv {
+		tempPriv[i] = pair.Private
+	}
+	err = wip.Sign(tempPriv)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	//Send transaction
-	tx, err := blockcy.SendTX(wip)
+	tx, err := bcy.SendTX(wip)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
