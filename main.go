@@ -20,6 +20,8 @@ type Gob struct {
 	state     baduk.Board
 }
 
+const FEES = 9999
+
 var templates = template.Must(template.ParseGlob("templates/*"))
 
 //Keeping it all in memory
@@ -152,13 +154,14 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	//Setup Multisig Transaction with OP_RETURN(bitduckSIZE)
 	//note that api protections mean that OP_RETURN needs to burn at least 1 satoshi
-	temptx, err := gobcy.TempMultiTX("", board.multi, wager-1, 2, pubkeys)
+	temptx, err := gobcy.TempMultiTX("", board.multi, wager-FEES-1, 2, pubkeys)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	opreturn := buildNullData("bitduck" + f("size"))
 	temptx.Outputs = append(temptx.Outputs, opreturn)
+	temptx.Fees = FEES
 	txskel, err := bcy.NewTX(temptx, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
