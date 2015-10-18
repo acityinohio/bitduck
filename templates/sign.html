@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+	<title>Bitduck Signature Page</title>
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.2/css/bootstrap.min.css">
+</head>
+<body>
+	<h1>Sign a Move</h1>
+	<h2>Both Players Sign to Embed Into Blockchain</h2>
+	<div class="well" id="toSign">
+	{{.ToSign}}
+	</div>
+	<div class="well">
+		<form action="/sign/{{.Multi}}" method="POST">
+			<div class="form-group">
+				<label for="blackSig">Black Stone Signature</label>
+				<input type="text" name="blackSig" placeholder="BlackSignature" required class="form-control" />
+			</div>
+			<div class="form-group">
+				<label for="whiteSig">White Stone Signature</label>
+				<input type="text" name="whiteSig" placeholder="WhiteSignature" required class="form-control" />
+			</div>
+			<input type="submit" class="btn btn-primary btn-submit">
+		</form>
+	</div>
+		<style type="text/css">
+			html {
+				text-align: center;
+			}
+			form {
+				width: 600px;
+				display: inline-block;
+				text-align: left;
+			}
+		</style>
+</body>
+</html>
