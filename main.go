@@ -1,9 +1,10 @@
 package main
 
 import (
+	"encoding/hex"
+	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"text/template"
 
 	"github.com/acityinohio/baduk"
@@ -11,13 +12,12 @@ import (
 )
 
 type Gob struct {
-	multi      string
-	serverPub  string
-	serverPriv string
-	blackPK    string
-	whitePK    string
-	blackMove  bool
-	state      baduk.Board
+	multi     string
+	blackPK   string
+	whitePK   string
+	blackMove bool
+	txskel    gobcy.TXSkel
+	state     baduk.Board
 }
 
 var templates = template.Must(template.ParseGlob("templates/*"))
@@ -28,19 +28,13 @@ var bcy gobcy.API
 
 func init() {
 	boards = make(map[string]*Gob)
-	var board Gob
-	board.state.Init(4)
-	board.blackPK = "024e57e7d387e40add43a71fa998cf9004deb73741b57dcff4cfe31251ceab64ce"
-	board.whitePK = "024f20d3f0d97e9cbce9e7d0586b034140b5d320fd86ea4ce14d1d82e52187ab38"
-	board.blackMove = true
-	board.multi = "Dtest"
-	boards["Dtest"] = &board
 	bcy = gobcy.API{"TESTTOKEN", "bcy", "test"}
 }
 
 func main() {
 	http.HandleFunc("/", indexHandler)
-	http.HandleFunc("/games/", gameHandler)
+	//http.HandleFunc("/games/", gameHandler)
+	http.HandleFunc("/sign/", signHandler)
 	http.HandleFunc("/new/", newGameHandler)
 	http.ListenAndServe(":80", nil)
 }
@@ -53,11 +47,11 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func gameHandler(w http.ResponseWriter, r *http.Request) {
+/* func gameHandler(w http.ResponseWriter, r *http.Request) {
 	multi := r.URL.Path[len("/games/"):]
 	board, ok := boards[multi]
 	if !ok {
-		http.Error(w, "Board does not exist", http.StatusInternalServerError)
+		http.Error(w, "Game does not exist at that address", http.StatusInternalServerError)
 		return
 	}
 	if r.Method == "POST" {
@@ -121,7 +115,7 @@ func moveHandler(w http.ResponseWriter, r *http.Request, board *Gob) {
 	}
 	http.Redirect(w, r, "/games/"+board.multi, http.StatusFound)
 	return
-}
+}*/
 
 func newGameHandler(w http.ResponseWriter, r *http.Request) {
 	f := r.FormValue
@@ -133,44 +127,82 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	wager, err := strconv.Atoi(f("wager"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	board.state.Init(sz)
 	board.blackPK = f("blackPK")
 	board.whitePK = f("whitePK")
+	pubkeys := []string{board.blackPK, board.whitePK}
 	board.blackMove = true
-	//Generate pub/priv key for this board
-	pair, err := bcy.GenAddrKeychain()
+	//Generate Multisig Address for this board
+	keychain, err := bcy.GenAddrMultisig(gobcy.AddrKeychain{PubKeys: pubkeys, ScriptType: "multisig-2-of-2"})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	board.serverPub = pair.Public
-	board.serverPriv = pair.Private
-	//Simulate funding multisig wallet from server
-	_, err = bcy.Faucet(pair, 5e6)
-	txskel, err := gobcy.TempMultiTX(pair.Address, "", 4e6, 2, []string{board.serverPub, board.blackPK, board.whitePK})
-	wip, err := bcy.NewTX(txskel, false)
+	board.multi = keychain.Address
+	//Fund Multisig with Faucet (this can be improved!)
+	_, err = bcy.Faucet(gobcy.AddrKeychain{Address: board.multi}, wager)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	//Make temporary array of keys, sign transaction
-	tempPriv := make([]string, len(wip.ToSign))
-	for i := range tempPriv {
-		tempPriv[i] = pair.Private
-	}
-	err = wip.Sign(tempPriv)
+	//Setup Multisig Transaction with OP_RETURN(bitduckSIZE)
+	//note that api protections mean that OP_RETURN needs to burn at least 1 satoshi
+	temptx, err := gobcy.TempMultiTX("", board.multi, wager-1, 2, pubkeys)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	//Send transaction
-	tx, err := bcy.SendTX(wip)
+	opreturn := buildNullData("bitduck" + f("size"))
+	temptx.Outputs = append(temptx.Outputs, opreturn)
+	txskel, err := bcy.NewTX(temptx, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	board.multi = tx.Trans.Outputs[0].Addresses[0]
+	board.txskel = txskel
 	boards[board.multi] = &board
-	http.Redirect(w, r, "/games/"+board.multi, http.StatusFound)
+	//Redirect to Sign Handler
+	http.Redirect(w, r, "/sign/"+board.multi, http.StatusFound)
+	return
+}
+
+func signHandler(w http.ResponseWriter, r *http.Request) {
+	multi := r.URL.Path[len("/sign/"):]
+	board, ok := boards[multi]
+	if !ok {
+		http.Error(w, "Game does not exist at that address", http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintf(w, "%+v", board.txskel)
+	/*if r.Method == "POST" {
+		moveHandler(w, r, board)
+		return
+	}
+	type gameTemp struct {
+		Multi     string
+		PrettySVG string
+		BlackMove bool
+	}
+	necessary := gameTemp{board.multi, board.state.PrettySVG(), board.blackMove}
+	err := templates.ExecuteTemplate(w, "game.html", necessary)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}*/
+}
+
+func buildNullData(data string) (opreturn gobcy.TXOutput) {
+	//set value to one
+	opreturn.Value = 1
+	//set script type
+	opreturn.ScriptType = "null-data"
+	//manually craft OP_RETURN byte array with ugly one-liner
+	raw := append([]byte{106, byte(len([]byte(data)))}, []byte(data)...)
+	opreturn.Script = hex.EncodeToString(raw)
 	return
 }
