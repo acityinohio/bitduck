@@ -50,47 +50,6 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func gameHandler(w http.ResponseWriter, r *http.Request) {
-	multi := r.URL.Path[len("/games/"):]
-	board, ok := boards[multi]
-	if !ok {
-		http.Error(w, "Game does not exist at that address", http.StatusInternalServerError)
-		return
-	}
-	if r.Method == "POST" {
-		moveHandler(w, r, board)
-		return
-	}
-	type gameTemp struct {
-		Multi     string
-		PrettySVG string
-		BlackMove bool
-	}
-	necessary := gameTemp{board.multi, board.state.PrettySVG(), board.blackMove}
-	err := templates.ExecuteTemplate(w, "game.html", necessary)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func moveHandler(w http.ResponseWriter, r *http.Request, board *Gob) {
-	//Get move, send transaction
-	f := r.FormValue
-	raw := f("orig-message")
-	rawmove := strings.Split(raw, "-")
-	if board.blackMove && rawmove[0] != "black" {
-		http.Error(w, "Not black's turn", http.StatusInternalServerError)
-		return
-	}
-	if !board.blackMove && rawmove[0] != "white" {
-		http.Error(w, "Not white's turn", http.StatusInternalServerError)
-		return
-	}
-	sendTXHandler(w, r, board, raw)
-	return
-}
-
 func newGameHandler(w http.ResponseWriter, r *http.Request) {
 	f := r.FormValue
 	var board Gob
@@ -119,12 +78,12 @@ func newGameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	board.multi = keychain.Address
 	//Fund Multisig with Faucet (this can be improved!)
-	//Put Multisig Address in Memory
 	_, err = bcy.Faucet(gobcy.AddrKeychain{Address: board.multi}, wager)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	//Put Multisig Address in Memory
 	boards[board.multi] = &board
 	//Setup Multisig Transaction with OP_RETURN(bitduckSIZE)
 	sendTXHandler(w, r, &board, "bitduck"+f("size"))
@@ -201,12 +160,54 @@ func signPostHandler(w http.ResponseWriter, r *http.Request, board *Gob) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/game/"+board.multi, http.StatusFound)
+	http.Redirect(w, r, "/games/"+board.multi, http.StatusFound)
+	return
+}
+
+func gameHandler(w http.ResponseWriter, r *http.Request) {
+	multi := r.URL.Path[len("/games/"):]
+	board, ok := boards[multi]
+	if !ok {
+		http.Error(w, "Game does not exist at that address", http.StatusInternalServerError)
+		return
+	}
+	if r.Method == "POST" {
+		moveHandler(w, r, board)
+		return
+	}
+	type gameTemp struct {
+		Multi     string
+		PrettySVG string
+		BlackMove bool
+	}
+	necessary := gameTemp{board.multi, board.state.PrettySVG(), board.blackMove}
+	err := templates.ExecuteTemplate(w, "game.html", necessary)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func moveHandler(w http.ResponseWriter, r *http.Request, board *Gob) {
+	//Get move, send transaction
+	f := r.FormValue
+	raw := f("orig-message")
+	rawmove := strings.Split(raw, "-")
+	if board.blackMove && rawmove[0] != "black" {
+		http.Error(w, "Not black's turn", http.StatusInternalServerError)
+		return
+	}
+	if !board.blackMove && rawmove[0] != "white" {
+		http.Error(w, "Not white's turn", http.StatusInternalServerError)
+		return
+	}
+	sendTXHandler(w, r, board, raw)
 	return
 }
 
 //update Board based on signed TX
 func updateMove(board *Gob) (err error) {
+	defer func() { board.txskel = gobcy.TXSkel{} }()
 	//find rawmove in OP_RETURN
 	var raw string
 	for _, v := range board.txskel.Trans.Outputs {
@@ -240,6 +241,5 @@ func updateMove(board *Gob) (err error) {
 	} else {
 		board.blackMove = true
 	}
-	board.txskel = gobcy.TXSkel{}
 	return
 }
