@@ -168,7 +168,7 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 	multi := r.URL.Path[len("/games/"):]
 	board, ok := boards[multi]
 	if !ok {
-		http.Error(w, "Game does not exist at that address", http.StatusInternalServerError)
+		searchForGame(w, r, multi)
 		return
 	}
 	if r.Method == "POST" {
@@ -186,6 +186,84 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func searchForGame(w http.ResponseWriter, r *http.Request, multi string) {
+	//err := templates.ExecuteTemplate(w, "searching.html", nil)
+	/*if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}*/
+	pks := r.URL.Query()
+	addr, err := bcy.GetAddrFull(multi)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	latestTX := addr.TXs[0]
+	if latestTX.DataProtocol != "unknown" {
+		http.Error(w, "No game found at that address", http.StatusInternalServerError)
+		return
+	}
+	moves := make([]string, 0)
+	for {
+		outputs := latestTX.Outputs
+		for _, v := range outputs {
+			if v.DataString != "" && v.DataString != "gameover" {
+				moves = append([]string{v.DataString}, moves...)
+			}
+		}
+		if strings.HasPrefix(moves[0], "bitduck") {
+			break
+		}
+		latestTX, err = bcy.GetTX(latestTX.Inputs[0].PrevHash)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	remakeGame(w, r, multi, moves, addr.FinalBalance, pks.Get("blackpk"), pks.Get("whitepk"))
+}
+
+func remakeGame(w http.ResponseWriter, r *http.Request, multi string, moves []string, wager int, blackpk string, whitepk string) {
+	var board Gob
+	board.blackPK = blackpk
+	board.whitePK = whitepk
+	board.wager = wager
+	board.multi = multi
+	sz, err := strconv.Atoi(moves[0][len("bitduck"):])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	board.state.Init(sz)
+	board.blackMove = true
+	for _, v := range moves[1:] {
+		rawmove := strings.Split(v, "-")
+		xmove, _ := strconv.Atoi(rawmove[1])
+		ymove, _ := strconv.Atoi(rawmove[2])
+		if board.blackMove {
+			err = board.state.SetB(xmove, ymove)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		} else if !board.blackMove {
+			err = board.state.SetW(xmove, ymove)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		if board.blackMove {
+			board.blackMove = false
+		} else {
+			board.blackMove = true
+		}
+	}
+	boards[multi] = &board
+	http.Redirect(w, r, "/games/"+multi, http.StatusFound)
+	return
 }
 
 func moveHandler(w http.ResponseWriter, r *http.Request, board *Gob) {
