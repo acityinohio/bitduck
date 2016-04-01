@@ -195,7 +195,7 @@ func searchForGame(w http.ResponseWriter, r *http.Request, multi string) {
 		return
 	}*/
 	pks := r.URL.Query()
-	addr, err := bcy.GetAddrFull(multi)
+	addr, err := bcy.GetAddrFull(multi, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -216,7 +216,7 @@ func searchForGame(w http.ResponseWriter, r *http.Request, multi string) {
 		if strings.HasPrefix(moves[0], "bitduck") {
 			break
 		}
-		latestTX, err = bcy.GetTX(latestTX.Inputs[0].PrevHash)
+		latestTX, err = bcy.GetTX(latestTX.Inputs[0].PrevHash, nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
